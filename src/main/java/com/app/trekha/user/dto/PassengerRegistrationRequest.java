@@ -2,6 +2,7 @@ package com.app.trekha.user.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
@@ -18,6 +19,10 @@ public class PassengerRegistrationRequest {
     private String email; // Nullable if registering with mobile
 
     // Add specific mobile number validation if needed, e.g. @Pattern
+    @Pattern(
+        regexp = "^(\\+\\d{1,3}[- ]?)?\\d{10}$",
+        message = "Mobile number should be valid (10 digits, optional country code)"
+    )
     private String mobileNumber; // Nullable if registering with email
 
     @NotBlank(message = "Password is required")
