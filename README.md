@@ -79,4 +79,4 @@ src/
 
 ## License
 
-This project is for demonstration purposes.
+This project is for commercial purpose
