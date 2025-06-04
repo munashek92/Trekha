@@ -1,4 +1,4 @@
-package com.trekha.trekha;
+package com.app.trekha;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
