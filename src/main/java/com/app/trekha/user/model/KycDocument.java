@@ -23,35 +23,35 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class KycDocument {
 
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
+        @Id
+        @GeneratedValue(strategy = GenerationType.IDENTITY)
+        private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "user_id", nullable = false)
-    private User user;
+        @ManyToOne(fetch = FetchType.LAZY, optional = false)
+        @JoinColumn(name = "user_id", nullable = false)
+        private User user;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private KycDocumentType documentType;
+        @Enumerated(EnumType.STRING)
+        @Column(nullable = false)
+        private KycDocumentType documentType;
 
-    @Column(nullable = false)
-    private String documentUrl; // Store path to S3 or local storage
+        @Column(nullable = false)
+        private String documentUrl; // Store path to S3 or local storage
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private KycStatus status = KycStatus.PENDING;
+        @Enumerated(EnumType.STRING)
+        @Column(nullable = false)
+        private KycStatus status = KycStatus.PENDING;
 
-    @Column(nullable = false, updatable = false)
-    private LocalDateTime uploadedAt;
+        @Column(nullable = false, updatable = false)
+        private LocalDateTime uploadedAt;
 
-    private LocalDateTime reviewedAt;
+        private LocalDateTime reviewedAt;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "reviewer_id") // Admin user who reviewed
-    private User reviewer; // This implies an Admin role/user who can review
+        @ManyToOne(fetch = FetchType.LAZY)
+        @JoinColumn(name = "reviewer_id") // Admin user who reviewed
+        private User reviewer; // This implies an Admin role/user who can review
 
-    private String rejectionReason;
+        private String rejectionReason;
 
     // Consider adding expiryDate for documents like licenses
     private LocalDate expiryDate;
