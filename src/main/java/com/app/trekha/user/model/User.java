@@ -1,8 +1,13 @@
 package com.app.trekha.user.model;
 
 import java.time.LocalDateTime;
+import java.util.Collection;
 import java.util.HashSet;
 import java.util.Set;
+
+import org.springframework.security.core.GrantedAuthority;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.userdetails.UserDetails;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -27,7 +32,7 @@ import lombok.NoArgsConstructor;
 })
 @Data
 @NoArgsConstructor
-public class User {
+public class User implements UserDetails{
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -74,4 +79,34 @@ public class User {
         this.passwordHash = passwordHash;
         this.registrationMethod = registrationMethod;
     }
+
+    @Override
+    public Collection<? extends GrantedAuthority> getAuthorities() {
+        Set<GrantedAuthority> authorities = new HashSet<>();
+        for (Role role : this.roles) {
+            authorities.add(new SimpleGrantedAuthority(role.getName().name()));
+        }
+        return authorities;
+    }
+
+    @Override
+    public String getPassword() {
+        return this.passwordHash; // Return the encoded password
+    }
+
+    @Override
+    public String getUsername() {
+        // Use email as the primary username for Spring Security, or mobile if email is null
+        return this.email != null ? this.email : this.mobileNumber;
+    }
+
+    @Override
+    public boolean isAccountNonExpired() { return true; } // Implement your logic if needed
+    @Override
+    public boolean isAccountNonLocked() { return isActive; } // Use isActive for account lock status
+    @Override
+    public boolean isCredentialsNonExpired() { return true; } // Implement your logic if needed
+    @Override
+    public boolean isEnabled() { return isActive; } // Use isActive for enabled status
+
 }

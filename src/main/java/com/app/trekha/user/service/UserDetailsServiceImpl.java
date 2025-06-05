@@ -18,11 +18,11 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class UserDetailsServiceImpl implements UserDetailsService {
 
-    private final UserRepository userRepository;
+private final UserRepository userRepository;
 
-    @Override
-    @Transactional
-    public UserDetails loadUserByUsername(String usernameOrEmailOrMobile) throws UsernameNotFoundException {
+@Override
+@Transactional
+public UserDetails loadUserByUsername(String usernameOrEmailOrMobile) throws UsernameNotFoundException {
         // Try finding by email first, then by mobile number
         User user = userRepository.findByEmail(usernameOrEmailOrMobile)
                 .orElseGet(() -> userRepository.findByMobileNumber(usernameOrEmailOrMobile)
@@ -32,13 +32,7 @@ public class UserDetailsServiceImpl implements UserDetailsService {
                 .map(role -> new SimpleGrantedAuthority(role.getName().name()))
                 .collect(Collectors.toList());
 
-        return new org.springframework.security.core.userdetails.User(
-                user.getEmail() != null ? user.getEmail() : user.getMobileNumber(), // Use email if available, otherwise mobile as username
-                user.getPasswordHash(),
-                user.isActive(), // enabled
-                true, // accountNonExpired
-                true, // credentialsNonExpired
-                true, // accountNonLocked
-                authorities);
+        return user;
+
 }
 }

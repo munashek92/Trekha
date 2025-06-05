@@ -38,5 +38,12 @@ public class GlobalExceptionHandler {
         ErrorDetails errorDetails = new ErrorDetails(new Date(), ex.getMessage(), request.getDescription(false));
         return new ResponseEntity<>(errorDetails, HttpStatus.UNAUTHORIZED);
     }
+
+    @ExceptionHandler(ResourceNotFoundException.class)
+    public ResponseEntity<?> handleResourceNotFoundException(ResourceNotFoundException ex, WebRequest request) {
+        ErrorDetails errorDetails = new ErrorDetails(new Date(), ex.getMessage(), request.getDescription(false));
+        return new ResponseEntity<>(errorDetails, HttpStatus.NOT_FOUND);
+    }
+
     // Add more specific exception handlers (e.g., ResourceNotFoundException)
 }
