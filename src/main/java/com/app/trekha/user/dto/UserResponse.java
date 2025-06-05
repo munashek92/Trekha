@@ -17,5 +17,7 @@ public class UserResponse {
     private String mobileNumber;
     private Set<String> roles;
     private String profilePictureUrl; // From PassengerProfile
-    // Add other fields as needed, e.g., isVerified
+    private boolean isEmailVerified = false;
+    private boolean isMobileVerified = false;
+    private boolean isActive = true;
 }

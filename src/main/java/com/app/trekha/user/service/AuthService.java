@@ -34,6 +34,12 @@ public class AuthService {
 
         User user = getUser(request, method);
 
+        if(method == RegistrationMethod.EMAIL){
+            user.setEmailVerified (true); // Send verification email
+        } else if(method == RegistrationMethod.MOBILE){
+            user.setMobileVerified(true); // Send OTP
+        }
+
         Set<Role> roles = new HashSet<>();
         Role passengerRole = roleRepository.findByName(ERole.ROLE_PASSENGER)
                 .orElseThrow(() -> new RuntimeException("Error: Role PASSENGER is not found."));
@@ -99,10 +105,18 @@ public class AuthService {
         response.setId(user.getId());
         response.setEmail(user.getEmail());
         response.setMobileNumber(user.getMobileNumber());
+
+        if(user.isEmailVerified()){
+            response.setEmailVerified(user.isEmailVerified());
+        } else if(user.isMobileVerified()) {
+            response.setMobileVerified(user.isMobileVerified());
+        }
+    
         if (profile != null) {
             response.setFirstName(profile.getFirstName());
             response.setLastName(profile.getLastName());
             response.setProfilePictureUrl(profile.getProfilePictureUrl());
+            response.setActive(user.isActive());
         }
         Set<String> roleNames = new HashSet<>();
         if (user.getRoles() != null) {
