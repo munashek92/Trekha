@@ -20,4 +20,6 @@ public class UserResponse {
     private boolean isEmailVerified;
     private boolean isMobileVerified;
     private boolean isActive;
+    private boolean isOnboardingCompleted;
+
 }

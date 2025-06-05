@@ -130,6 +130,8 @@ public class AuthService {
             response.setFirstName(profile.getFirstName());
             response.setLastName(profile.getLastName());
             response.setProfilePictureUrl(profile.getProfilePictureUrl());
+            response.setOnboardingCompleted(profile.isOnboardingCompleted()); // Add onboarding status
+
         }
         Set<String> roleNames = new HashSet<>();
         if (user.getRoles() != null) {

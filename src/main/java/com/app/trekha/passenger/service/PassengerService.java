@@ -68,6 +68,8 @@ public class PassengerService {
         response.setActive(user.isActive());
         response.setEmailVerified(user.isEmailVerified());
         response.setMobileVerified(user.isMobileVerified());
+        response.setOnboardingCompleted(profile.isOnboardingCompleted());
+
 
         Set<String> roleNames = new java.util.HashSet<>();
         if (user.getRoles() != null) {
@@ -75,6 +77,20 @@ public class PassengerService {
         }
         response.setRoles(roleNames);
         return response;
+    }
+
+    @Transactional
+    public UserResponse completeOnboarding(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        PassengerProfile profile = passengerProfileRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("PassengerProfile", "userId", userId));
+
+        profile.setOnboardingCompleted(true);
+        PassengerProfile updatedProfile = passengerProfileRepository.save(profile);
+
+        return mapToUserResponse(user, updatedProfile);
     }
 
     // TODO: Add methods for getting passenger profile, etc.

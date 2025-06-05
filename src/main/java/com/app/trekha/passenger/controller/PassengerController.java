@@ -1,16 +1,23 @@
 package com.app.trekha.passenger.controller;
 
-import com.app.trekha.passenger.dto.PassengerProfileUpdateRequest;
-import com.app.trekha.passenger.service.PassengerService;
-import com.app.trekha.user.dto.UserResponse;
-import jakarta.validation.Valid;
-import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.ModelAttribute;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+import com.app.trekha.passenger.dto.PassengerProfileUpdateRequest;
+import com.app.trekha.passenger.service.PassengerService;
+import com.app.trekha.user.dto.UserResponse;
+
+import jakarta.validation.Valid;
+import lombok.RequiredArgsConstructor;
 
 @RestController
 @RequestMapping("/api/v1/passengers")
@@ -34,4 +41,18 @@ public class PassengerController {
         UserResponse updatedProfile = passengerService.updatePassengerProfile(authenticatedUserId, request);
         return ResponseEntity.ok(updatedProfile);
     }
+
+    @PostMapping("/me/complete-onboarding")
+    @PreAuthorize("hasRole('PASSENGER')")
+    public ResponseEntity<UserResponse> markOnboardingAsComplete() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        // Assuming your UserDetails implementation (your User entity) provides the User ID
+        Long authenticatedUserId = ((com.app.trekha.user.model.User) authentication.getPrincipal()).getId();
+
+        UserResponse updatedProfile = passengerService.completeOnboarding(authenticatedUserId);
+        return ResponseEntity.ok(updatedProfile);
+    }
+
+    // TODO: Add endpoint to get current passenger's profile
+
 }

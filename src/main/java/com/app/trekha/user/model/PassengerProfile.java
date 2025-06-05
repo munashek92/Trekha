@@ -40,4 +40,7 @@ public class PassengerProfile {
 
     @Column(nullable = false)
     private LocalDateTime updatedAt;
+
+    @Column(nullable = false, columnDefinition = "BOOLEAN DEFAULT FALSE")
+    private boolean isOnboardingCompleted = false;
 }
