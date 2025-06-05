@@ -152,7 +152,7 @@ public class AuthService {
 
         User userEntity = userRepository.findByEmail(userDetails.getUsername())
                 .orElseGet(() -> userRepository.findByMobileNumber(userDetails.getUsername())
-                        .orElseThrow(() -> new RuntimeException("User not found after authentication")));
+                        .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found after successful authentication with: " + userDetails.getUsername())));
 
         Set<String> roles = userDetails.getAuthorities().stream()
                 .map(item -> item.getAuthority())
