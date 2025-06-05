@@ -2,11 +2,11 @@ package com.app.trekha.passenger.service;
 
 import com.app.trekha.common.exception.ResourceNotFoundException;
 import com.app.trekha.passenger.dto.PassengerProfileUpdateRequest;
-import com.app.trekha.passenger.model.PassengerProfile;
-import com.app.trekha.passenger.repository.PassengerProfileRepository;
 import com.app.trekha.storage.FileStorageService;
 import com.app.trekha.user.dto.UserResponse;
+import com.app.trekha.user.model.PassengerProfile;
 import com.app.trekha.user.model.User;
+import com.app.trekha.user.repository.PassengerProfileRepository;
 import com.app.trekha.user.repository.UserRepository;
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
@@ -14,6 +14,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor

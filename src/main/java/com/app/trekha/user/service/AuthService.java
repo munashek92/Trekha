@@ -145,16 +145,18 @@ public class AuthService {
 
         SecurityContextHolder.getContext().setAuthentication(authentication);
         
-        org.springframework.security.core.userdetails.User userDetails =
-            (org.springframework.security.core.userdetails.User) authentication.getPrincipal();
+        // The principal is your custom User entity which implements UserDetails
+        com.app.trekha.user.model.User authenticatedUserPrincipal =
+            (com.app.trekha.user.model.User) authentication.getPrincipal();
 
-        String jwt = jwtService.generateToken(userDetails);
 
-        User userEntity = userRepository.findByEmail(userDetails.getUsername())
-                .orElseGet(() -> userRepository.findByMobileNumber(userDetails.getUsername())
-                        .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found after successful authentication with: " + userDetails.getUsername())));
+        String jwt = jwtService.generateToken(authenticatedUserPrincipal);
 
-        Set<String> roles = userDetails.getAuthorities().stream()
+        User userEntity = userRepository.findByEmail(authenticatedUserPrincipal.getUsername())
+                .orElseGet(() -> userRepository.findByMobileNumber(authenticatedUserPrincipal.getUsername())
+                        .orElseThrow(() -> new org.springframework.security.core.userdetails.UsernameNotFoundException("User not found after successful authentication with: " + authenticatedUserPrincipal.getUsername())));
+
+        Set<String> roles = authenticatedUserPrincipal.getAuthorities().stream()
                 .map(item -> item.getAuthority())
                 .collect(Collectors.toSet());
 
@@ -162,7 +164,7 @@ public class AuthService {
         userEntity.setLastLoginAt(java.time.LocalDateTime.now());
         userRepository.save(userEntity);
 
-        return new JwtResponse(jwt, userEntity.getId(), userDetails.getUsername(), roles);
+        return new JwtResponse(jwt, userEntity.getId(), authenticatedUserPrincipal.getUsername(), roles);
     }
 
 }

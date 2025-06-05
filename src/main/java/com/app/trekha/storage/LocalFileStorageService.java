@@ -4,6 +4,8 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import jakarta.annotation.PostConstruct;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,6 +22,7 @@ public class LocalFileStorageService implements FileStorageService {
     private Path rootLocation;
 
     // This could be called from a @PostConstruct method or init() if needed
+    @PostConstruct
     public void init() {
         this.rootLocation = Paths.get(storageLocation);
         try {
