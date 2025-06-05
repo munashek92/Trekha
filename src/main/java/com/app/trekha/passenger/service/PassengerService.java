@@ -93,5 +93,15 @@ public class PassengerService {
         return mapToUserResponse(user, updatedProfile);
     }
 
+    public UserResponse getPassengerProfile(Long userId) {
+        User user = userRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
+
+        PassengerProfile profile = passengerProfileRepository.findById(userId)
+                .orElseThrow(() -> new ResourceNotFoundException("PassengerProfile", "userId", userId));
+
+        return mapToUserResponse(user, profile);
+    }
+
     // TODO: Add methods for getting passenger profile, etc.
 }
