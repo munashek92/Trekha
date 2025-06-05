@@ -17,7 +17,7 @@ public class UserResponse {
     private String mobileNumber;
     private Set<String> roles;
     private String profilePictureUrl; // From PassengerProfile
-    private boolean isEmailVerified = false;
-    private boolean isMobileVerified = false;
-    private boolean isActive = true;
+    private boolean isEmailVerified;
+    private boolean isMobileVerified;
+    private boolean isActive;
 }

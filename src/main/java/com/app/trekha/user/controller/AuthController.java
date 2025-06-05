@@ -1,5 +1,7 @@
 package com.app.trekha.user.controller;
 
+import com.app.trekha.user.dto.JwtResponse;
+import com.app.trekha.user.dto.LoginRequest;
 import com.app.trekha.user.dto.PassengerRegistrationRequest;
 import com.app.trekha.user.dto.UserResponse;
 import com.app.trekha.user.model.RegistrationMethod;
@@ -37,7 +39,10 @@ public class AuthController {
         UserResponse userResponse = authService.registerPassenger(registrationRequest, RegistrationMethod.MOBILE);
         return ResponseEntity.status(HttpStatus.CREATED).body(userResponse);
     }
-
-    // TODO: Add /login endpoint
+    @PostMapping("/login")
+    public ResponseEntity<?> authenticateUser(@Valid @RequestBody LoginRequest loginRequest) {
+        JwtResponse jwtResponse = authService.loginUser(loginRequest);
+        return ResponseEntity.ok(jwtResponse);
+    }
     // TODO: Add social login endpoints (/google, /facebook, /apple)
 }

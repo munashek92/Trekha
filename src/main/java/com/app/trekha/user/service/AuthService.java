@@ -2,9 +2,17 @@ package com.app.trekha.user.service;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+
+import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import org.springframework.security.core.Authentication;
+import com.app.trekha.config.security.JwtService;
+import com.app.trekha.user.dto.JwtResponse;
+import com.app.trekha.user.dto.LoginRequest;
 import com.app.trekha.user.dto.PassengerRegistrationRequest;
 import com.app.trekha.user.dto.UserResponse;
 import com.app.trekha.user.model.ERole;
@@ -16,8 +24,10 @@ import com.app.trekha.user.repository.PassengerProfileRepository;
 import com.app.trekha.user.repository.RoleRepository;
 import com.app.trekha.user.repository.UserRepository;
 
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -27,6 +37,8 @@ public class AuthService {
     private final RoleRepository roleRepository;
     private final PassengerProfileRepository passengerProfileRepository;
     private final PasswordEncoder passwordEncoder;
+    private final AuthenticationManager authenticationManager;
+    private final JwtService jwtService;
 
     @Transactional
     public UserResponse registerPassenger(PassengerRegistrationRequest request, RegistrationMethod method) {
@@ -66,6 +78,7 @@ public class AuthService {
         passengerProfile.setUser(savedUser); // This sets the userId as well due to @MapsId
         passengerProfile.setFirstName(request.getFirstName());
         passengerProfile.setLastName(request.getLastName());
+        passengerProfile.setCreatedAt(LocalDateTime.now());
         // passengerProfile.setProfilePictureUrl(); // Can be updated later
         return passengerProfile;
     }
@@ -77,6 +90,7 @@ public class AuthService {
         user.setMobileNumber(request.getMobileNumber());
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRegistrationMethod(method);
+        user.setCreatedAt(LocalDateTime.now());
         return user;
     }
 
@@ -106,17 +120,16 @@ public class AuthService {
         response.setEmail(user.getEmail());
         response.setMobileNumber(user.getMobileNumber());
 
-        if(user.isEmailVerified()){
-            response.setEmailVerified(user.isEmailVerified());
-        } else if(user.isMobileVerified()) {
-            response.setMobileVerified(user.isMobileVerified());
-        }
+        // Set verification status from the User entity
+        response.setEmailVerified(user.isEmailVerified());
+        response.setMobileVerified(user.isMobileVerified());
+        response.setActive(user.isActive());
+    
     
         if (profile != null) {
             response.setFirstName(profile.getFirstName());
             response.setLastName(profile.getLastName());
             response.setProfilePictureUrl(profile.getProfilePictureUrl());
-            response.setActive(user.isActive());
         }
         Set<String> roleNames = new HashSet<>();
         if (user.getRoles() != null) {
@@ -126,5 +139,30 @@ public class AuthService {
         return response;
     }
 
-    // TODO: Implement login, social login methods
+    public JwtResponse loginUser(LoginRequest loginRequest) {
+        Authentication authentication = authenticationManager.authenticate(
+                new UsernamePasswordAuthenticationToken(loginRequest.getLoginIdentifier(), loginRequest.getPassword()));
+
+        SecurityContextHolder.getContext().setAuthentication(authentication);
+        
+        org.springframework.security.core.userdetails.User userDetails =
+            (org.springframework.security.core.userdetails.User) authentication.getPrincipal();
+
+        String jwt = jwtService.generateToken(userDetails);
+
+        User userEntity = userRepository.findByEmail(userDetails.getUsername())
+                .orElseGet(() -> userRepository.findByMobileNumber(userDetails.getUsername())
+                        .orElseThrow(() -> new RuntimeException("User not found after authentication")));
+
+        Set<String> roles = userDetails.getAuthorities().stream()
+                .map(item -> item.getAuthority())
+                .collect(Collectors.toSet());
+
+        // Update last login time
+        userEntity.setLastLoginAt(java.time.LocalDateTime.now());
+        userRepository.save(userEntity);
+
+        return new JwtResponse(jwt, userEntity.getId(), userDetails.getUsername(), roles);
+    }
+
 }
