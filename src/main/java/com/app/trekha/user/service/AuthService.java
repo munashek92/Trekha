@@ -46,11 +46,11 @@ public class AuthService {
 
         User user = getUser(request, method);
 
-        if(method == RegistrationMethod.EMAIL){
-            user.setEmailVerified (true); // Send verification email
-        } else if(method == RegistrationMethod.MOBILE){
-            user.setMobileVerified(true); // Send OTP
-        }
+        // if(method == RegistrationMethod.EMAIL){
+        //     user.setEmailVerified (true); // Send verification email
+        // } else if(method == RegistrationMethod.MOBILE){
+        //     user.setMobileVerified(true); // Send OTP
+        // }
 
         Set<Role> roles = new HashSet<>();
         Role passengerRole = roleRepository.findByName(ERole.ROLE_PASSENGER)
@@ -60,8 +60,12 @@ public class AuthService {
 
         // For now, mark as active. Email/Mobile verification can be added later.
         user.setActive(true);
-        if (method == RegistrationMethod.EMAIL) user.setEmailVerified(false); // Send verification email
-        if (method == RegistrationMethod.MOBILE) user.setMobileVerified(false); // Send OTP
+        // Set verification status - initially false for email/mobile requiring verification
+        if (method == RegistrationMethod.EMAIL) {
+            user.setEmailVerified(false); // Will require email verification
+        } else if (method == RegistrationMethod.MOBILE) {
+            user.setMobileVerified(false); // Will require mobile OTP verification
+        }
 
         User savedUser = userRepository.save(user);
 
@@ -79,6 +83,7 @@ public class AuthService {
         passengerProfile.setFirstName(request.getFirstName());
         passengerProfile.setLastName(request.getLastName());
         passengerProfile.setCreatedAt(LocalDateTime.now());
+        passengerProfile.setUpdatedAt(LocalDateTime.now()); // Explicitly set updatedAt on creation
         // passengerProfile.setProfilePictureUrl(); // Can be updated later
         return passengerProfile;
     }
@@ -91,6 +96,8 @@ public class AuthService {
         user.setPasswordHash(passwordEncoder.encode(request.getPassword()));
         user.setRegistrationMethod(method);
         user.setCreatedAt(LocalDateTime.now());
+        user.setUpdatedAt(LocalDateTime.now()); // Explicitly set updatedAt on creation
+
         return user;
     }
 
