@@ -1,4 +1,4 @@
-package com.trekha.trekha;
+package com.app.trekha;
 
 import com.app.trekha.TrekhaApplication;
 import org.junit.jupiter.api.Test;

@@ -1,4 +1,4 @@
-package com.trekha.trekha.user.controller;
+package com.app.trekha.user.controller;
 
 import com.app.trekha.TrekhaApplication;
 import com.app.trekha.user.dto.LoginRequest;
