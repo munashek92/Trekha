@@ -34,7 +34,7 @@ public class JwtAuthFilter extends OncePerRequestFilter {
     ) throws ServletException, IOException {
         Logger logger = LoggerFactory.getLogger(JwtAuthFilter.class);
         final String authHeader = request.getHeader("Authorization");
-        logger.debug("Authorization Header: {}", authHeader); // LOG THIS
+        logger.debug("Authorization Header: {}", authHeader);
 
         final String jwt;
         final String userEmailOrMobile; // This will be the username (email or mobile)
