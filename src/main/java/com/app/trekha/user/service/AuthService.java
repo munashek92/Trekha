@@ -46,12 +46,6 @@ public class AuthService {
 
         User user = getUser(request, method);
 
-        // if(method == RegistrationMethod.EMAIL){
-        //     user.setEmailVerified (true); // Send verification email
-        // } else if(method == RegistrationMethod.MOBILE){
-        //     user.setMobileVerified(true); // Send OTP
-        // }
-
         Set<Role> roles = new HashSet<>();
         Role passengerRole = roleRepository.findByName(ERole.ROLE_PASSENGER)
                 .orElseThrow(() -> new RuntimeException("Error: Role PASSENGER is not found."));
