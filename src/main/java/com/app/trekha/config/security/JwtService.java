@@ -1,6 +1,7 @@
 package com.app.trekha.config.security;
 
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import io.jsonwebtoken.io.Decoders;
@@ -48,16 +49,13 @@ public class JwtService {
     }
 
     public boolean isTokenValid(String token, UserDetails userDetails) {
-        final String username = extractUsername(token);
-        return (username.equals(userDetails.getUsername())) && !isTokenExpired(token);
-    }
-
-    private boolean isTokenExpired(String token) {
-        return extractExpiration(token).before(new Date());
-    }
-
-    private Date extractExpiration(String token) {
-        return extractClaim(token, Claims::getExpiration);
+        try {
+            final String username = extractUsername(token);
+            // The !isTokenExpired check is redundant because extractUsername would have already thrown an exception.
+            return username.equals(userDetails.getUsername());
+        } catch (ExpiredJwtException e) {
+            return false; // Token is expired, therefore not valid.
+        }
     }
 
     private Claims extractAllClaims(String token) {
