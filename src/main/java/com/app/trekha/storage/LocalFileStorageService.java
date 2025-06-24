@@ -17,14 +17,16 @@ import java.util.UUID;
 public class LocalFileStorageService implements FileStorageService {
 
     @Value("${trekha.storage.location:uploads}") // Default to 'uploads' directory
-    private String storageLocation;
+    private String storageLocationName;
 
     private Path rootLocation;
 
     // This could be called from a @PostConstruct method or init() if needed
     @PostConstruct
     public void init() {
-        this.rootLocation = Paths.get(storageLocation);
+        if (this.rootLocation == null) {
+            this.rootLocation = Paths.get(storageLocationName); // Resolves relative to CWD
+        }
         try {
             Files.createDirectories(rootLocation);
         } catch (IOException e) {
@@ -39,7 +41,7 @@ public class LocalFileStorageService implements FileStorageService {
         }
 
         // Ensure the subdirectory exists
-        Path subDirPath = Paths.get(storageLocation, subDirectory);
+        Path subDirPath = rootLocation.resolve(subDirectory); // Use rootLocation for physical path
         Files.createDirectories(subDirPath);
 
         // Generate a unique file name
@@ -54,6 +56,6 @@ public class LocalFileStorageService implements FileStorageService {
 
         Files.copy(file.getInputStream(), destinationFile, StandardCopyOption.REPLACE_EXISTING);
 
-        return "/" + storageLocation + "/" + subDirectory + "/" + uniqueFileName; // Return a relative path or URL
+        return "/" + storageLocationName + "/" + subDirectory + "/" + uniqueFileName; // Return a URL-friendly path
     }
 }
