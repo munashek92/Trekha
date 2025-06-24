@@ -27,6 +27,9 @@ public class PassengerService {
     @Transactional
     public UserResponse updatePassengerProfile(Long userId, PassengerProfileUpdateRequest request) {
         // Find the user and their profile
+        if (userId == null || request == null) {
+            throw new NullPointerException("User ID and update request must not be null");
+        }
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new ResourceNotFoundException("User", "id", userId));
 
