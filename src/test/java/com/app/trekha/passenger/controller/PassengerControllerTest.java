@@ -10,9 +10,12 @@ import com.app.trekha.user.model.KycStatus;
 import com.app.trekha.user.service.KycService;
 import com.app.trekha.user.service.UserDetailsServiceImpl;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
-import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
@@ -24,31 +27,49 @@ import static org.hamcrest.Matchers.is;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.csrf;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 @WebMvcTest(PassengerController.class)
+@Import(PassengerControllerTest.ControllerTestConfig.class)
 class PassengerControllerTest {
+
+    @TestConfiguration
+    static class ControllerTestConfig {
+        @Bean
+        public PassengerService passengerService() {
+            return Mockito.mock(PassengerService.class);
+        }
+
+        @Bean
+        public KycService kycService() {
+            return Mockito.mock(KycService.class);
+        }
+
+        @Bean
+        public JwtService jwtService() {
+            return Mockito.mock(JwtService.class);
+        }
+
+        @Bean
+        public UserDetailsServiceImpl userDetailsService() {
+            return Mockito.mock(UserDetailsServiceImpl.class);
+        }
+    }
 
     @Autowired
     private MockMvc mockMvc;
 
-    @MockBean
+    @Autowired
     private PassengerService passengerService;
 
-    @MockBean
+    @Autowired
     private KycService kycService;
-
-    // These are required by Spring Security when it's on the classpath for @WebMvcTest
-    @MockBean
-    private JwtService jwtService;
-
-    @MockBean
-    private UserDetailsServiceImpl userDetailsService;
 
     @Test
     @WithMockCustomUser
-    void getMyProfile_whenAuthenticated_shouldReturnProfile() throws Exception {
+    void getMyProfile_WhenAuthenticated_ShouldReturnProfile() throws Exception {
         UserResponse userResponse = new UserResponse(1L, "Test", "User", "test@example.com", "1234567890", Set.of("ROLE_PASSENGER"), null, true, true, true, true);
         when(passengerService.getPassengerProfile(1L)).thenReturn(userResponse);
 
@@ -62,7 +83,7 @@ class PassengerControllerTest {
 
     @Test
     @WithMockCustomUser
-    void updateMyProfile_withValidData_shouldUpdateProfile() throws Exception {
+    void updateMyProfile_WithValidData_ShouldUpdateProfile() throws Exception {
         UserResponse updatedResponse = new UserResponse(1L, "Updated", "User", "test@example.com", "1234567890", Set.of("ROLE_PASSENGER"), null, true, true, true, true);
         when(passengerService.updatePassengerProfile(eq(1L), any())).thenReturn(updatedResponse);
 
@@ -76,26 +97,27 @@ class PassengerControllerTest {
                         .with(request -> {
                             request.setMethod("PUT");
                             return request;
-                        }))
+                        })
+                        .with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.firstName", is("Updated")));
     }
 
     @Test
     @WithMockCustomUser
-    void markOnboardingAsComplete_whenAuthenticated_shouldSucceed() throws Exception {
+    void markOnboardingAsComplete_WhenAuthenticated_ShouldSucceed() throws Exception {
         UserResponse userResponse = new UserResponse();
         userResponse.setOnboardingCompleted(true);
         when(passengerService.completeOnboarding(1L)).thenReturn(userResponse);
 
-        mockMvc.perform(post("/api/v1/passengers/me/complete-onboarding"))
+        mockMvc.perform(post("/api/v1/passengers/me/complete-onboarding").with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.onboardingCompleted", is(true)));
     }
 
     @Test
     @WithMockCustomUser
-    void uploadKycDocument_withValidData_shouldSucceed() throws Exception {
+    void uploadKycDocument_WithValidData_ShouldSucceed() throws Exception {
         KycDocumentResponse kycResponse = new KycDocumentResponse(1L, 1L, KycDocumentType.NATIONAL_ID, "/kyc-documents/1/file.jpg", KycStatus.PENDING, LocalDateTime.now(), null, null);
         when(kycService.uploadKycDocument(eq(1L), any())).thenReturn(kycResponse);
 
@@ -103,7 +125,8 @@ class PassengerControllerTest {
 
         mockMvc.perform(multipart("/api/v1/passengers/me/kyc-upload")
                         .file(kycFile)
-                        .param("documentType", "NATIONAL_ID"))
+                        .param("documentType", "NATIONAL_ID")
+                        .with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status", is("PENDING")))
                 .andExpect(jsonPath("$.documentType", is("NATIONAL_ID")));
@@ -111,27 +134,29 @@ class PassengerControllerTest {
 
     @Test
     @WithMockCustomUser
-    void uploadKycDocument_withMissingFile_shouldReturnBadRequest() throws Exception {
+    void uploadKycDocument_WithMissingFile_ShouldReturnBadRequest() throws Exception {
         // The @NotNull validation on the 'file' field in KycUploadRequest will trigger a 400 Bad Request.
         // We are not sending the 'file' part in this request.
         mockMvc.perform(multipart("/api/v1/passengers/me/kyc-upload")
-                        .param("documentType", "NATIONAL_ID"))
+                        .param("documentType", "NATIONAL_ID")
+                        .with(csrf()))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
     @WithMockCustomUser
-    void uploadKycDocument_withMissingDocumentType_shouldReturnBadRequest() throws Exception {
+    void uploadKycDocument_WithMissingDocumentType_ShouldReturnBadRequest() throws Exception {
         // The @NotNull validation on the 'documentType' field will trigger a 400 Bad Request.
         MockMultipartFile kycFile = new MockMultipartFile("file", "national_id.jpg", "image/jpeg", "kyc data".getBytes());
 
         mockMvc.perform(multipart("/api/v1/passengers/me/kyc-upload")
-                        .file(kycFile))
+                        .file(kycFile)
+                        .with(csrf()))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void getMyProfile_whenUnauthenticated_shouldReturnUnauthorized() throws Exception {
+    void getMyProfile_WhenUnauthenticated_ShouldReturnUnauthorized() throws Exception {
         // No @WithMockCustomUser, so the request is anonymous.
         // Spring Security's filter chain should deny access.
         mockMvc.perform(get("/api/v1/passengers/me/profile"))
