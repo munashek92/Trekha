@@ -33,16 +33,13 @@ public class PassengerController {
 
 
     @PutMapping("/me/profile")
-    @PreAuthorize("hasRole('PASSENGER') and #userId == authentication.principal.id") // Ensure user can only update their own profile
+    @PreAuthorize("hasRole('PASSENGER')")
     public ResponseEntity<UserResponse> updateMyProfile(
-            @PathVariable Long userId, // Get user ID from path for @PreAuthorize check
             @Valid @ModelAttribute PassengerProfileUpdateRequest request) { // Use @ModelAttribute for multipart/form-data
 
         // Get the authenticated user's ID from the security context
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        UserDetails userDetails = (UserDetails) authentication.getPrincipal();
-        // Assuming your UserDetails implementation provides the User ID
-        Long authenticatedUserId = ((com.app.trekha.user.model.User) userDetails).getId(); // Cast to your User entity
+        Long authenticatedUserId = ((com.app.trekha.user.model.User) authentication.getPrincipal()).getId();
 
         UserResponse updatedProfile = passengerService.updatePassengerProfile(authenticatedUserId, request);
         return ResponseEntity.ok(updatedProfile);
