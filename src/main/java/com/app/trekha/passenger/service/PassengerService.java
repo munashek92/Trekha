@@ -106,5 +106,4 @@ public class PassengerService {
         return mapToUserResponse(user, profile);
     }
 
-    // TODO: Add methods for getting passenger profile, etc.
 }

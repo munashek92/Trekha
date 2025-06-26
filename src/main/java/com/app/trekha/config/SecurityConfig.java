@@ -18,11 +18,8 @@ import org.springframework.security.web.AuthenticationEntryPoint;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
-import com.app.trekha.common.exception.ErrorDetails;
 import com.app.trekha.config.security.JwtAuthFilter;
 import com.app.trekha.user.service.UserDetailsServiceImpl;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 
