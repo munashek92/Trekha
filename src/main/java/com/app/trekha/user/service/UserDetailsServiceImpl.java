@@ -28,9 +28,9 @@ public UserDetails loadUserByUsername(String usernameOrEmailOrMobile) throws Use
                 .orElseGet(() -> userRepository.findByMobileNumber(usernameOrEmailOrMobile)
                         .orElseThrow(() -> new UsernameNotFoundException("User Not Found with identifier: " + usernameOrEmailOrMobile)));
 
-        List<GrantedAuthority> authorities = user.getRoles().stream()
-                .map(role -> new SimpleGrantedAuthority(role.getName().name()))
-                .collect(Collectors.toList());
+        // List<GrantedAuthority> authorities = user.getRoles().stream()
+        //         .map(role -> new SimpleGrantedAuthority(role.getName().name()))
+        //         .collect(Collectors.toList());
 
         return user;
 
