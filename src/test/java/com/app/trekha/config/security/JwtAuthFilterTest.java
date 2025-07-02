@@ -26,7 +26,6 @@ import com.app.trekha.user.service.UserDetailsServiceImpl;
 
 import io.jsonwebtoken.ExpiredJwtException;
 import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.security.SignatureException;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
 import jakarta.servlet.http.HttpServletRequest;
@@ -176,22 +175,19 @@ class JwtAuthFilterTest {
     }
 
     @Test
-    void doFilterInternal_UserDetailsServiceReturnsNullUserDetails_ShouldThrowNullPointerExceptionDuringTokenValidation() throws ServletException, IOException {
-        when(request.getHeader("Authorization")).thenReturn("Bearer tokenCausesNPE");
-        when(jwtService.extractUsername("tokenCausesNPE")).thenReturn("testuser@example.com");
+    void doFilterInternal_UserDetailsServiceReturnsNull_ShouldNotSetAuthentication() throws ServletException, IOException {
+        when(request.getHeader("Authorization")).thenReturn("Bearer tokenForNullUser");
+        when(jwtService.extractUsername("tokenForNullUser")).thenReturn("testuser@example.com");
         when(securityContext.getAuthentication()).thenReturn(null);
         // Mock UserDetailsService to return null, which is bad practice for the service but tests filter's resilience
         when(userDetailsService.loadUserByUsername("testuser@example.com")).thenReturn(null);
 
-        when(jwtService.isTokenValid(eq("tokenCausesNPE"), isNull())).thenThrow(new NullPointerException("Simulated NPE from userDetails.getUsername()"));
+        // The filter should not throw an exception, it should handle the null userDetails gracefully
+        jwtAuthFilter.doFilterInternal(request, response, filterChain);
 
-
-        assertThrows(NullPointerException.class, () -> {
-            jwtAuthFilter.doFilterInternal(request, response, filterChain);
-        });
-
+        // Verify that authentication was not set and the filter chain continued
         verify(securityContext, never()).setAuthentication(any());
-        verify(filterChain, never()).doFilter(request, response);
+        verify(filterChain).doFilter(request, response);
     }
 
 
