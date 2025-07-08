@@ -9,10 +9,15 @@ import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
+import com.app.trekha.common.exception.ResourceNotFoundException;
 import org.springframework.security.core.Authentication;
+
+import com.app.trekha.common.service.EmailService;
+import com.app.trekha.common.service.SmsService;
 import com.app.trekha.config.security.JwtService;
 import com.app.trekha.user.dto.JwtResponse;
 import com.app.trekha.user.dto.LoginRequest;
+import com.app.trekha.user.dto.MobileVerificationRequest;
 import com.app.trekha.user.dto.PassengerRegistrationRequest;
 import com.app.trekha.user.dto.UserResponse;
 import com.app.trekha.user.model.ERole;
@@ -20,13 +25,17 @@ import com.app.trekha.user.model.PassengerProfile;
 import com.app.trekha.user.model.RegistrationMethod;
 import com.app.trekha.user.model.Role;
 import com.app.trekha.user.model.User;
+import com.app.trekha.user.model.VerificationToken;
 import com.app.trekha.user.repository.PassengerProfileRepository;
 import com.app.trekha.user.repository.RoleRepository;
 import com.app.trekha.user.repository.UserRepository;
+import com.app.trekha.user.repository.VerificationTokenRepository;
 
 import java.time.LocalDateTime;
 import java.util.HashSet;
+import java.util.Random;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Collectors;
 
 @Service
@@ -39,6 +48,9 @@ public class AuthService {
     private final PasswordEncoder passwordEncoder;
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
+    private final VerificationTokenRepository tokenRepository;
+    private final EmailService emailService;
+    private final SmsService smsService;
 
     @Transactional
     public UserResponse registerPassenger(PassengerRegistrationRequest request, RegistrationMethod method) {
@@ -67,8 +79,82 @@ public class AuthService {
 
         passengerProfileRepository.save(passengerProfile);
 
+        createAndSendVerificationToken(savedUser, passengerProfile, method);
+
+
         return mapToUserResponse(savedUser, passengerProfile);
     }
+
+    private void createAndSendVerificationToken(User user, PassengerProfile profile, RegistrationMethod method) {
+        // Invalidate any existing token for this user
+        tokenRepository.findByUser(user).ifPresent(tokenRepository::delete);
+
+        if (method == RegistrationMethod.EMAIL) {
+            String token = UUID.randomUUID().toString();
+            VerificationToken verificationToken = new VerificationToken(token, user);
+            tokenRepository.save(verificationToken);
+
+            String verificationUrl = "http://localhost:8080/api/v1/auth/verify-email?token=" + token; // In prod, get base URL from config
+            String emailBody = "Hi " + profile.getFirstName() + ",\n\n"
+                    + "Please click the link below to verify your email address:\n"
+                    + verificationUrl + "\n\n"
+                    + "This link will expire in 15 minutes.\n\n"
+                    + "Thanks,\nThe Trekha Team";
+            emailService.sendEmail(user.getEmail(), "Trekha - Verify Your Email", emailBody);
+
+        } else if (method == RegistrationMethod.MOBILE) {
+            // Generate a 6-digit OTP
+            String otp = String.format("%06d", new Random().nextInt(999999));
+            VerificationToken verificationToken = new VerificationToken(otp, user);
+            tokenRepository.save(verificationToken);
+
+            String smsBody = "Your Trekha verification code is: " + otp + ". It will expire in 15 minutes.";
+            smsService.sendSms(user.getMobileNumber(), smsBody);
+        }
+    }
+
+    @Transactional
+    public void verifyEmail(String token) {
+        VerificationToken verificationToken = tokenRepository.findByToken(token)
+                .orElseThrow(() -> new IllegalArgumentException("Invalid verification token."));
+
+        if (verificationToken.isExpired()) {
+            tokenRepository.delete(verificationToken);
+            throw new IllegalArgumentException("Verification token has expired.");
+        }
+
+        User user = verificationToken.getUser();
+        user.setEmailVerified(true);
+        userRepository.save(user);
+
+        // Token has been used, so we can delete it.
+        tokenRepository.delete(verificationToken);
+    }
+
+    @Transactional
+    public void verifyMobile(String mobileNumber, String otp) {
+        User user = userRepository.findByMobileNumber(mobileNumber)
+                .orElseThrow(() -> new ResourceNotFoundException("User", "mobileNumber", mobileNumber));
+
+        VerificationToken verificationToken = tokenRepository.findByUser(user)
+                .orElseThrow(() -> new IllegalArgumentException("No verification token found for this user. Please request a new one."));
+
+        if (verificationToken.isExpired()) {
+            tokenRepository.delete(verificationToken);
+            throw new IllegalArgumentException("Verification token has expired. Please request a new one.");
+        }
+
+        if (!verificationToken.getToken().equals(otp)) {
+            throw new IllegalArgumentException("Invalid verification code.");
+        }
+
+        user.setMobileVerified(true);
+        userRepository.save(user);
+
+        // Token has been used, so we can delete it.
+        tokenRepository.delete(verificationToken);
+    }
+
 
     private PassengerProfile getPassengerProfile(PassengerRegistrationRequest request, User savedUser) {
         // Create Passenger Profile

@@ -4,37 +4,34 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
-import java.util.Collection;
-import java.util.HashSet;
+import java.time.LocalDateTime;
 import java.util.Optional;
-import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
-import org.mockito.MockitoAnnotations;
-import org.springframework.security.authentication.AuthenticationManager;
-import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.GrantedAuthority;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.security.crypto.password.PasswordEncoder;
 
-import com.app.trekha.config.security.JwtService;
-import com.app.trekha.user.dto.JwtResponse;
-import com.app.trekha.user.dto.LoginRequest;
+import com.app.trekha.common.exception.ResourceNotFoundException;
+import com.app.trekha.common.service.EmailService;
+import com.app.trekha.common.service.SmsService;
 import com.app.trekha.user.dto.PassengerRegistrationRequest;
-import com.app.trekha.user.dto.UserResponse;
 import com.app.trekha.user.model.ERole;
 import com.app.trekha.user.model.PassengerProfile;
 import com.app.trekha.user.model.RegistrationMethod;
 import com.app.trekha.user.model.Role;
 import com.app.trekha.user.model.User;
+import com.app.trekha.user.model.VerificationToken;
 import com.app.trekha.user.repository.PassengerProfileRepository;
 import com.app.trekha.user.repository.RoleRepository;
 import com.app.trekha.user.repository.UserRepository;
+import com.app.trekha.user.repository.VerificationTokenRepository;
 
+@ExtendWith(MockitoExtension.class)
 class AuthServiceTest {
 
     @Mock
@@ -46,210 +43,192 @@ class AuthServiceTest {
     @Mock
     private PasswordEncoder passwordEncoder;
     @Mock
-    private AuthenticationManager authenticationManager;
+    private VerificationTokenRepository tokenRepository;
     @Mock
-    private JwtService jwtService;
+    private EmailService emailService;
+    @Mock
+    private SmsService smsService;
 
     @InjectMocks
     private AuthService authService;
 
+    private PassengerRegistrationRequest emailRequest;
+    private PassengerRegistrationRequest mobileRequest;
+    private User testUser;
+
     @BeforeEach
     void setUp() {
-        MockitoAnnotations.openMocks(this);
+        emailRequest = new PassengerRegistrationRequest();
+        emailRequest.setEmail("test@example.com");
+        emailRequest.setPassword("password123");
+        emailRequest.setFirstName("Test");
+        emailRequest.setLastName("User");
+
+        mobileRequest = new PassengerRegistrationRequest();
+        mobileRequest.setMobileNumber("1234567890");
+        mobileRequest.setPassword("password123");
+        mobileRequest.setFirstName("Test");
+        mobileRequest.setLastName("User");
+
+        testUser = new User();
+        testUser.setId(1L);
+        testUser.setEmail("test@example.com");
+        testUser.setMobileNumber("1234567890");
     }
 
     @Test
-    void registerPassenger_WithEmailRegistration_Success() {
-        PassengerRegistrationRequest request = getRequest();
+    void registerPassenger_WithEmail_ShouldCreateUserAndSendVerificationEmail() {
+        // Arrange
+        when(userRepository.existsByEmail(emailRequest.getEmail())).thenReturn(false);
+        when(roleRepository.findByName(ERole.ROLE_PASSENGER)).thenReturn(Optional.of(new Role(ERole.ROLE_PASSENGER)));
+        when(passwordEncoder.encode(emailRequest.getPassword())).thenReturn("encodedPassword");
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+        when(passengerProfileRepository.save(any(PassengerProfile.class))).thenAnswer(i -> i.getArgument(0));
 
-        when(userRepository.existsByEmail("test@example.com")).thenReturn(false);
-        when(passwordEncoder.encode("password")).thenReturn("encodedPassword");
+        // Act
+        authService.registerPassenger(emailRequest, RegistrationMethod.EMAIL);
 
-        Role passengerRole = new Role();
-        passengerRole.setName(ERole.ROLE_PASSENGER);
-        when(roleRepository.findByName(ERole.ROLE_PASSENGER)).thenReturn(Optional.of(passengerRole));
+        // Assert
+        ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(emailService).sendEmail(eq("test@example.com"), eq("Trekha - Verify Your Email"), bodyCaptor.capture());
+        assertTrue(bodyCaptor.getValue().contains("Hi Test"));
+        assertTrue(bodyCaptor.getValue().contains("verify-email?token="));
+        verify(smsService, never()).sendSms(any(), any());
+        verify(tokenRepository).save(any(VerificationToken.class));
 
-        User savedUser = getSavedUser(passengerRole);
-
-        when(userRepository.save(any(User.class))).thenReturn(savedUser);
-
-        PassengerProfile savedProfile = getSavedProfile(savedUser);
-        when(passengerProfileRepository.save(any(PassengerProfile.class))).thenReturn(savedProfile);
-
-        UserResponse response = authService.registerPassenger(request, RegistrationMethod.EMAIL);
-
-        assertEquals("test@example.com", response.getEmail());
-        assertEquals("John", response.getFirstName());
-        assertEquals("Doe", response.getLastName());
-        assertFalse(response.isEmailVerified());
-        assertTrue(response.isActive());
-        assertTrue(response.getRoles().contains("ROLE_PASSENGER"));
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertFalse(userCaptor.getValue().isEmailVerified());
     }
 
     @Test
-    void registerPassenger_WithMobileRegistration_Success() {
-        PassengerRegistrationRequest request = new PassengerRegistrationRequest();
-        request.setMobileNumber("1234567890");
-        request.setPassword("password");
-        request.setFirstName("Jane");
-        request.setLastName("Smith");
+    void registerPassenger_WithMobile_ShouldCreateUserAndSendVerificationSms() {
+        // Arrange
+        when(userRepository.existsByMobileNumber(mobileRequest.getMobileNumber())).thenReturn(false);
+        when(roleRepository.findByName(ERole.ROLE_PASSENGER)).thenReturn(Optional.of(new Role(ERole.ROLE_PASSENGER)));
+        when(passwordEncoder.encode(mobileRequest.getPassword())).thenReturn("encodedPassword");
+        when(userRepository.save(any(User.class))).thenAnswer(i -> i.getArgument(0));
+        when(passengerProfileRepository.save(any(PassengerProfile.class))).thenAnswer(i -> i.getArgument(0));
 
-        when(userRepository.existsByMobileNumber("1234567890")).thenReturn(false);
-        when(passwordEncoder.encode("password")).thenReturn("encodedPassword");
+        // Act
+        authService.registerPassenger(mobileRequest, RegistrationMethod.MOBILE);
 
-        Role passengerRole = new Role();
-        passengerRole.setName(ERole.ROLE_PASSENGER);
-        when(roleRepository.findByName(ERole.ROLE_PASSENGER)).thenReturn(Optional.of(passengerRole));
+        // Assert
+        ArgumentCaptor<String> smsBodyCaptor = ArgumentCaptor.forClass(String.class);
+        verify(smsService).sendSms(eq("1234567890"), smsBodyCaptor.capture());
+        assertTrue(smsBodyCaptor.getValue().startsWith("Your Trekha verification code is: "));
+        verify(emailService, never()).sendEmail(any(), any(), any());
+        verify(tokenRepository).save(any(VerificationToken.class));
 
-        User savedUser = new User();
-        savedUser.setId(2L);
-        savedUser.setMobileNumber("1234567890");
-        savedUser.setRoles(Set.of(passengerRole));
-        savedUser.setEmailVerified(false);
-        savedUser.setMobileVerified(false);
-        savedUser.setActive(true);
-
-        when(userRepository.save(any(User.class))).thenReturn(savedUser);
-
-        PassengerProfile savedProfile = new PassengerProfile();
-        savedProfile.setUser(savedUser);
-        savedProfile.setFirstName("Jane");
-        savedProfile.setLastName("Smith");
-        when(passengerProfileRepository.save(any(PassengerProfile.class))).thenReturn(savedProfile);
-
-        UserResponse response = authService.registerPassenger(request, RegistrationMethod.MOBILE);
-
-        assertEquals("1234567890", response.getMobileNumber());
-        assertEquals("Jane", response.getFirstName());
-        assertEquals("Smith", response.getLastName());
-        assertFalse(response.isMobileVerified());
-        assertTrue(response.isActive());
-        assertTrue(response.getRoles().contains("ROLE_PASSENGER"));
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertFalse(userCaptor.getValue().isMobileVerified());
     }
 
     @Test
-    void registerPassenger_WithExistingEmail_ThrowsException() {
-        PassengerRegistrationRequest request = new PassengerRegistrationRequest();
-        request.setEmail("test@example.com");
-        when(userRepository.existsByEmail("test@example.com")).thenReturn(true);
+    void verifyEmail_WithValidToken_ShouldSetEmailVerifiedToTrue() {
+        // Arrange
+        VerificationToken token = new VerificationToken("valid-token", testUser);
+        when(tokenRepository.findByToken("valid-token")).thenReturn(Optional.of(token));
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> authService.registerPassenger(request, RegistrationMethod.EMAIL));
-        assertEquals("Error: Email is already in use!", ex.getMessage());
+        // Act
+        authService.verifyEmail("valid-token");
+
+        // Assert
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertTrue(userCaptor.getValue().isEmailVerified());
+        verify(tokenRepository).delete(token);
     }
 
     @Test
-    void registerPassenger_WithExistingMobile_ThrowsException() {
-        PassengerRegistrationRequest request = new PassengerRegistrationRequest();
-        request.setMobileNumber("1234567890");
-        when(userRepository.existsByMobileNumber("1234567890")).thenReturn(true);
+    void verifyEmail_WithInvalidToken_ShouldThrowException() {
+        // Arrange
+        when(tokenRepository.findByToken("invalid-token")).thenReturn(Optional.empty());
 
-        IllegalArgumentException ex = assertThrows(IllegalArgumentException.class,
-                () -> authService.registerPassenger(request, RegistrationMethod.MOBILE));
-        assertEquals("Error: Mobile number is already in use!", ex.getMessage());
+        // Act & Assert
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> authService.verifyEmail("invalid-token"));
+        assertEquals("Invalid verification token.", exception.getMessage());
     }
 
     @Test
-    void registerPassenger_NullRequest_ThrowsException() {
-        assertThrows(NullPointerException.class, () -> authService.registerPassenger(null, RegistrationMethod.EMAIL));
+    void verifyEmail_WithExpiredToken_ShouldThrowException() {
+        // Arrange
+        VerificationToken expiredToken = new VerificationToken("expired-token", testUser);
+        expiredToken.setExpiryDate(LocalDateTime.now().minusMinutes(30)); // Manually expire it
+        when(tokenRepository.findByToken("expired-token")).thenReturn(Optional.of(expiredToken));
+
+        // Act & Assert
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> authService.verifyEmail("expired-token"));
+        assertEquals("Verification token has expired.", exception.getMessage());
+        verify(tokenRepository).delete(expiredToken);
     }
 
     @Test
-    void registerPassenger_NullRegistrationMethod_ThrowsException() {
-        PassengerRegistrationRequest request = new PassengerRegistrationRequest();
-        assertThrows(IllegalArgumentException.class, () -> authService.registerPassenger(request, null));
+    void verifyMobile_WithValidOtp_ShouldSetMobileVerifiedToTrue() {
+        // Arrange
+        String otp = "123456";
+        VerificationToken token = new VerificationToken(otp, testUser);
+        when(userRepository.findByMobileNumber("1234567890")).thenReturn(Optional.of(testUser));
+        when(tokenRepository.findByUser(testUser)).thenReturn(Optional.of(token));
+
+        // Act
+        authService.verifyMobile("1234567890", otp);
+
+        // Assert
+        ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(userCaptor.capture());
+        assertTrue(userCaptor.getValue().isMobileVerified());
+        verify(tokenRepository).delete(token);
     }
 
     @Test
-    void loginUser_Successful() {
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setLoginIdentifier("test@example.com");
-        loginRequest.setPassword("password");
+    void verifyMobile_WithInvalidOtp_ShouldThrowException() {
+        // Arrange
+        String correctOtp = "123456";
+        String wrongOtp = "999999";
+        VerificationToken token = new VerificationToken(correctOtp, testUser);
+        when(userRepository.findByMobileNumber("1234567890")).thenReturn(Optional.of(testUser));
+        when(tokenRepository.findByUser(testUser)).thenReturn(Optional.of(token));
 
-        Authentication authentication = mock(Authentication.class);
-        User userPrincipal = mock(User.class);
-        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(authentication);
-        when(authentication.getPrincipal()).thenReturn(userPrincipal);
-
-        when(userPrincipal.getUsername()).thenReturn("test@example.com");
-
-         // Mock the ID - this is crucial as the service method calls getId()
-        when(userPrincipal.getId()).thenReturn(1L);
-        // Mock authorities - keep only the relevant ones for the test assertion
-    
-        Set<GrantedAuthority> authorities = new HashSet<>();
-        authorities.add(new SimpleGrantedAuthority("ROLE_PASSENGER"));
-        when(userPrincipal.getAuthorities()).thenReturn((Collection)authorities);
-
-        when(jwtService.generateToken(userPrincipal)).thenReturn("jwt-token");
-
-
-        User userEntity = new User();
-        userEntity.setId(1L);
-        userEntity.setEmail("test@example.com");
-        when(userRepository.findByEmail("test@example.com")).thenReturn(Optional.of(userEntity));
-
-        JwtResponse jwtResponse = authService.loginUser(loginRequest);
-
-        assertEquals("jwt-token", jwtResponse.getToken());
-        assertEquals(1L, jwtResponse.getId());
-        assertTrue(jwtResponse.getRoles().contains("ROLE_PASSENGER"));
+        // Act & Assert
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> authService.verifyMobile("1234567890", wrongOtp));
+        assertEquals("Invalid verification code.", exception.getMessage());
+        verify(userRepository, never()).save(any(User.class));
     }
 
     @Test
-    void loginUser_UserNotFound_ThrowsException() {
-        LoginRequest loginRequest = new LoginRequest();
-        loginRequest.setLoginIdentifier("unknown@example.com");
-        loginRequest.setPassword("password");
+    void verifyMobile_WithNonExistentUser_ShouldThrowException() {
+        // Arrange
+        when(userRepository.findByMobileNumber("non-existent-number")).thenReturn(Optional.empty());
 
-        Authentication authentication = mock(Authentication.class);
-        User userPrincipal = mock(User.class);
-        when(authenticationManager.authenticate(any(UsernamePasswordAuthenticationToken.class))).thenReturn(authentication);
-        when(authentication.getPrincipal()).thenReturn(userPrincipal);
-
-        when(userPrincipal.getUsername()).thenReturn("unknown@example.com");
-        Set<GrantedAuthority> authoritiesForNotFound = new HashSet<>();
-        authoritiesForNotFound.add(new SimpleGrantedAuthority("ROLE_PASSENGER"));
-        when(userPrincipal.getAuthorities()).thenReturn((Collection)authoritiesForNotFound);
-
-        when(jwtService.generateToken(userPrincipal)).thenReturn("jwt-token");
-        when(userRepository.findByEmail("unknown@example.com")).thenReturn(Optional.empty());
-        when(userRepository.findByMobileNumber("0946234657")).thenReturn(Optional.empty());
-
-        assertThrows(org.springframework.security.core.userdetails.UsernameNotFoundException.class,
-                () -> authService.loginUser(loginRequest));
+        // Act & Assert
+        assertThrows(ResourceNotFoundException.class, () -> authService.verifyMobile("non-existent-number", "123456"));
     }
 
     @Test
-    void loginUser_NullRequest_ThrowsException() {
-        assertThrows(NullPointerException.class, () -> authService.loginUser(null));
+    void verifyMobile_WithNoTokenForUser_ShouldThrowException() {
+        // Arrange
+        when(userRepository.findByMobileNumber("1234567890")).thenReturn(Optional.of(testUser));
+        when(tokenRepository.findByUser(testUser)).thenReturn(Optional.empty());
+
+        // Act & Assert
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> authService.verifyMobile("1234567890", "123456"));
+        assertEquals("No verification token found for this user. Please request a new one.", exception.getMessage());
     }
 
-    private User getSavedUser(Role passengerRole) {
-        User savedUser = new User();
-        savedUser.setId(1L);
-        savedUser.setEmail("test@example.com");
-        savedUser.setRoles(Set.of(passengerRole));
-        savedUser.setEmailVerified(false);
-        savedUser.setMobileVerified(false);
-        savedUser.setActive(true);
-        return savedUser;
-    }
+    @Test
+    void verifyMobile_WithExpiredToken_ShouldThrowException() {
+        // Arrange
+        String otp = "123456";
+        VerificationToken expiredToken = new VerificationToken(otp, testUser);
+        expiredToken.setExpiryDate(LocalDateTime.now().minusMinutes(30));
+        when(userRepository.findByMobileNumber("1234567890")).thenReturn(Optional.of(testUser));
+        when(tokenRepository.findByUser(testUser)).thenReturn(Optional.of(expiredToken));
 
-    private PassengerRegistrationRequest getRequest() {
-        PassengerRegistrationRequest request = new PassengerRegistrationRequest();
-        request.setEmail("test@example.com");
-        request.setPassword("password");
-        request.setFirstName("John");
-        request.setLastName("Doe");
-        return request;
-    }
-
-    private PassengerProfile getSavedProfile(User savedUser) {
-        PassengerProfile savedProfile = new PassengerProfile();
-        savedProfile.setUser(savedUser);
-        savedProfile.setFirstName("John");
-        savedProfile.setLastName("Doe");
-        return savedProfile;
+        // Act & Assert
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> authService.verifyMobile("1234567890", otp));
+        assertEquals("Verification token has expired. Please request a new one.", exception.getMessage());
+        verify(tokenRepository).delete(expiredToken);
     }
 }
