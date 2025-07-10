@@ -2,12 +2,13 @@ package com.app.trekha.user.service;
 
 import jakarta.transaction.Transactional;
 import lombok.RequiredArgsConstructor;
+import org.springframework.security.core.userdetails.UsernameNotFoundException;
 
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.crypto.password.PasswordEncoder;
-import org.springframework.stereotype.Service;
+import org.springframework.stereotype.Service;import com.app.trekha.user.dto.PasswordResetRequest;
 
 import com.app.trekha.common.exception.ResourceNotFoundException;
 import org.springframework.security.core.Authentication;
@@ -27,6 +28,7 @@ import com.app.trekha.user.model.Role;
 import com.app.trekha.user.model.User;
 import com.app.trekha.user.model.VerificationToken;
 import com.app.trekha.user.repository.PassengerProfileRepository;
+import com.app.trekha.user.repository.PasswordResetTokenRepository;
 import com.app.trekha.user.repository.RoleRepository;
 import com.app.trekha.user.repository.UserRepository;
 import com.app.trekha.user.repository.VerificationTokenRepository;
@@ -49,6 +51,7 @@ public class AuthService {
     private final AuthenticationManager authenticationManager;
     private final JwtService jwtService;
     private final VerificationTokenRepository tokenRepository;
+    private final PasswordResetTokenRepository passwordResetTokenRepository;
     private final EmailService emailService;
     private final SmsService smsService;
 
@@ -154,6 +157,72 @@ public class AuthService {
         // Token has been used, so we can delete it.
         tokenRepository.delete(verificationToken);
     }
+    
+    @Transactional
+    public void requestPasswordReset(String loginIdentifier) {
+        User user = userRepository.findByEmail(loginIdentifier)
+            .orElseGet(() -> userRepository.findByMobileNumber(loginIdentifier)
+                .orElseThrow(() -> new UsernameNotFoundException("User not found with identifier: " + loginIdentifier)));
+
+        // Check if the account is active
+        if (!user.isActive()) {
+            throw new IllegalStateException("Account is not active. Please contact support.");
+        }
+
+        // Check verification status based on the registration method
+        if (user.getRegistrationMethod() == RegistrationMethod.EMAIL && !user.isEmailVerified()) {
+            throw new IllegalStateException("Email is not verified. Please verify your email first.");
+        } else if (user.getRegistrationMethod() == RegistrationMethod.MOBILE && !user.isMobileVerified()) {
+            throw new IllegalStateException("Mobile number is not verified. Please verify your mobile number first.");
+        }
+
+        // Invalidate any existing token for this user
+        passwordResetTokenRepository.findByUser(user).ifPresent(passwordResetTokenRepository::delete);
+
+        // Generate a reset token
+        String token = UUID.randomUUID().toString();
+        com.app.trekha.user.model.PasswordResetToken resetToken = new com.app.trekha.user.model.PasswordResetToken(token, user);
+        passwordResetTokenRepository.save(resetToken);
+
+        // Send reset email
+        String resetUrl = "http://localhost:8080/api/v1/auth/reset-password?token=" + token; // In prod, get base URL from config
+        String emailBody = "Hi " + (user.getUsername() != null ? user.getUsername() : "User") + ",\n\n"
+            + "You requested a password reset. Please click the link below to reset your password:\n"
+            + resetUrl + "\n\n"
+            + "This link will expire in 30 minutes.\n\n"
+            + "If you did not request a password reset, please ignore this email.\n\n"
+            + "Thanks,\nThe Trekha Team";
+        emailService.sendEmail(user.getEmail(), "Trekha - Reset Your Password", emailBody);
+    }
+
+    @Transactional
+    public void resetPassword(String token, PasswordResetRequest request) {
+        com.app.trekha.user.model.PasswordResetToken resetToken = passwordResetTokenRepository.findByToken(token)
+            .orElseThrow(() -> new IllegalArgumentException("Invalid or expired password reset token. Please request a new one."));
+
+        if (resetToken.isExpired()) {
+            passwordResetTokenRepository.delete(resetToken);
+            throw new IllegalArgumentException("Password reset token has expired. Please request a new one.");
+        }
+
+        if (!isValidPassword(request.getNewPassword())) {
+            throw new IllegalArgumentException("Invalid password. Password must be at least 8 characters long and contain at least one digit.");
+        }
+
+        User user = resetToken.getUser();
+        user.setPasswordHash(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+
+        // Token has been used, so we can delete it.
+        passwordResetTokenRepository.delete(resetToken);
+    }
+
+    private boolean isValidPassword(String password) {
+        // Add your password validation logic here (e.g., length, special characters, etc.)
+        return password != null && password.length() >= 8 && password.matches(".*\\d.*");
+    }
+
+
 
 
     private PassengerProfile getPassengerProfile(PassengerRegistrationRequest request, User savedUser) {
@@ -255,5 +324,5 @@ public class AuthService {
 
         return new JwtResponse(jwt, userEntity.getId(), authenticatedUserPrincipal.getUsername(), roles);
     }
-
 }
+
