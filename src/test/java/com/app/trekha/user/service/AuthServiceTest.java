@@ -20,6 +20,7 @@ import com.app.trekha.common.exception.ResourceNotFoundException;
 import com.app.trekha.common.service.EmailService;
 import com.app.trekha.common.service.SmsService;
 import com.app.trekha.user.dto.PassengerRegistrationRequest;
+import com.app.trekha.user.dto.PasswordResetRequest;
 import com.app.trekha.user.model.ERole;
 import com.app.trekha.user.model.PassengerProfile;
 import com.app.trekha.user.model.RegistrationMethod;
@@ -27,6 +28,7 @@ import com.app.trekha.user.model.Role;
 import com.app.trekha.user.model.User;
 import com.app.trekha.user.model.VerificationToken;
 import com.app.trekha.user.repository.PassengerProfileRepository;
+import com.app.trekha.user.repository.PasswordResetTokenRepository;
 import com.app.trekha.user.repository.RoleRepository;
 import com.app.trekha.user.repository.UserRepository;
 import com.app.trekha.user.repository.VerificationTokenRepository;
@@ -45,6 +47,8 @@ class AuthServiceTest {
     @Mock
     private VerificationTokenRepository tokenRepository;
     @Mock
+    private PasswordResetTokenRepository passwordResetTokenRepository;
+    @Mock
     private EmailService emailService;
     @Mock
     private SmsService smsService;
@@ -56,28 +60,32 @@ class AuthServiceTest {
     private PassengerRegistrationRequest mobileRequest;
     private User testUser;
 
+    private static final String EMAIL = "test@example.com";
+    private static final String MOBILE = "1234567890";
+
+
     @BeforeEach
     void setUp() {
         emailRequest = new PassengerRegistrationRequest();
-        emailRequest.setEmail("test@example.com");
+        emailRequest.setEmail(EMAIL);
         emailRequest.setPassword("password123");
         emailRequest.setFirstName("Test");
         emailRequest.setLastName("User");
 
         mobileRequest = new PassengerRegistrationRequest();
-        mobileRequest.setMobileNumber("1234567890");
+        mobileRequest.setMobileNumber(MOBILE);
         mobileRequest.setPassword("password123");
         mobileRequest.setFirstName("Test");
         mobileRequest.setLastName("User");
 
         testUser = new User();
         testUser.setId(1L);
-        testUser.setEmail("test@example.com");
-        testUser.setMobileNumber("1234567890");
+        testUser.setEmail(EMAIL);
+        testUser.setMobileNumber(MOBILE);
     }
 
     @Test
-    void registerPassenger_WithEmail_ShouldCreateUserAndSendVerificationEmail() {
+    void registerPassengerWithEmailShouldCreateUserAndSendVerificationEmail() {
         // Arrange
         when(userRepository.existsByEmail(emailRequest.getEmail())).thenReturn(false);
         when(roleRepository.findByName(ERole.ROLE_PASSENGER)).thenReturn(Optional.of(new Role(ERole.ROLE_PASSENGER)));
@@ -90,7 +98,7 @@ class AuthServiceTest {
 
         // Assert
         ArgumentCaptor<String> bodyCaptor = ArgumentCaptor.forClass(String.class);
-        verify(emailService).sendEmail(eq("test@example.com"), eq("Trekha - Verify Your Email"), bodyCaptor.capture());
+        verify(emailService).sendEmail(eq(EMAIL), eq("Trekha - Verify Your Email"), bodyCaptor.capture());
         assertTrue(bodyCaptor.getValue().contains("Hi Test"));
         assertTrue(bodyCaptor.getValue().contains("verify-email?token="));
         verify(smsService, never()).sendSms(any(), any());
@@ -102,7 +110,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void registerPassenger_WithMobile_ShouldCreateUserAndSendVerificationSms() {
+    void registerPassengerWithMobileShouldCreateUserAndSendVerificationSms() {
         // Arrange
         when(userRepository.existsByMobileNumber(mobileRequest.getMobileNumber())).thenReturn(false);
         when(roleRepository.findByName(ERole.ROLE_PASSENGER)).thenReturn(Optional.of(new Role(ERole.ROLE_PASSENGER)));
@@ -115,7 +123,7 @@ class AuthServiceTest {
 
         // Assert
         ArgumentCaptor<String> smsBodyCaptor = ArgumentCaptor.forClass(String.class);
-        verify(smsService).sendSms(eq("1234567890"), smsBodyCaptor.capture());
+        verify(smsService).sendSms(eq(MOBILE), smsBodyCaptor.capture());
         assertTrue(smsBodyCaptor.getValue().startsWith("Your Trekha verification code is: "));
         verify(emailService, never()).sendEmail(any(), any(), any());
         verify(tokenRepository).save(any(VerificationToken.class));
@@ -126,7 +134,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyEmail_WithValidToken_ShouldSetEmailVerifiedToTrue() {
+    void verifyEmailWithValidTokenShouldSetEmailVerifiedToTrue() {
         // Arrange
         VerificationToken token = new VerificationToken("valid-token", testUser);
         when(tokenRepository.findByToken("valid-token")).thenReturn(Optional.of(token));
@@ -142,7 +150,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyEmail_WithInvalidToken_ShouldThrowException() {
+    void verifyEmailWithInvalidTokenShouldThrowException() {
         // Arrange
         when(tokenRepository.findByToken("invalid-token")).thenReturn(Optional.empty());
 
@@ -152,7 +160,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyEmail_WithExpiredToken_ShouldThrowException() {
+    void verifyEmailWithExpiredTokenShouldThrowException() {
         // Arrange
         VerificationToken expiredToken = new VerificationToken("expired-token", testUser);
         expiredToken.setExpiryDate(LocalDateTime.now().minusMinutes(30)); // Manually expire it
@@ -165,15 +173,15 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyMobile_WithValidOtp_ShouldSetMobileVerifiedToTrue() {
+    void verifyMobileWithValidOtpShouldSetMobileVerifiedToTrue() {
         // Arrange
         String otp = "123456";
         VerificationToken token = new VerificationToken(otp, testUser);
-        when(userRepository.findByMobileNumber("1234567890")).thenReturn(Optional.of(testUser));
+        when(userRepository.findByMobileNumber(MOBILE)).thenReturn(Optional.of(testUser));
         when(tokenRepository.findByUser(testUser)).thenReturn(Optional.of(token));
 
         // Act
-        authService.verifyMobile("1234567890", otp);
+        authService.verifyMobile(MOBILE, otp);
 
         // Assert
         ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
@@ -183,12 +191,12 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyMobile_WithInvalidOtp_ShouldThrowException() {
+    void verifyMobileWithInvalidOtpShouldThrowException() {
         // Arrange
         String correctOtp = "123456";
         String wrongOtp = "999999";
         VerificationToken token = new VerificationToken(correctOtp, testUser);
-        when(userRepository.findByMobileNumber("1234567890")).thenReturn(Optional.of(testUser));
+        when(userRepository.findByMobileNumber(MOBILE)).thenReturn(Optional.of(testUser));
         when(tokenRepository.findByUser(testUser)).thenReturn(Optional.of(token));
 
         // Act & Assert
@@ -198,7 +206,7 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyMobile_WithNonExistentUser_ShouldThrowException() {
+    void verifyMobileWithNonExistentUserShouldThrowException() {
         // Arrange
         when(userRepository.findByMobileNumber("non-existent-number")).thenReturn(Optional.empty());
 
@@ -207,9 +215,9 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyMobile_WithNoTokenForUser_ShouldThrowException() {
+    void verifyMobileWithNoTokenForUserShouldThrowException() {
         // Arrange
-        when(userRepository.findByMobileNumber("1234567890")).thenReturn(Optional.of(testUser));
+        when(userRepository.findByMobileNumber(MOBILE)).thenReturn(Optional.of(testUser));
         when(tokenRepository.findByUser(testUser)).thenReturn(Optional.empty());
 
         // Act & Assert
@@ -218,12 +226,12 @@ class AuthServiceTest {
     }
 
     @Test
-    void verifyMobile_WithExpiredToken_ShouldThrowException() {
+    void verifyMobileWithExpiredTokenShouldThrowException() {
         // Arrange
         String otp = "123456";
         VerificationToken expiredToken = new VerificationToken(otp, testUser);
         expiredToken.setExpiryDate(LocalDateTime.now().minusMinutes(30));
-        when(userRepository.findByMobileNumber("1234567890")).thenReturn(Optional.of(testUser));
+        when(userRepository.findByMobileNumber(MOBILE)).thenReturn(Optional.of(testUser));
         when(tokenRepository.findByUser(testUser)).thenReturn(Optional.of(expiredToken));
 
         // Act & Assert
@@ -231,4 +239,150 @@ class AuthServiceTest {
         assertEquals("Verification token has expired. Please request a new one.", exception.getMessage());
         verify(tokenRepository).delete(expiredToken);
     }
+
+@Test
+    void requestPasswordResetWithValidEmailShouldGenerateTokenAndSendEmail() {
+    // Arrange
+    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(testUser));
+    testUser.setActive(true);
+    testUser.setEmailVerified(true); // Assuming email verification required for password reset
+
+    // Act
+    authService.requestPasswordReset(EMAIL);
+
+    // Assert
+    verify(passwordResetTokenRepository).save(any(com.app.trekha.user.model.PasswordResetToken.class));
+    ArgumentCaptor<String> emailBodyCaptor = ArgumentCaptor.forClass(String.class);
+    verify(emailService).sendEmail(eq(EMAIL), eq("Trekha - Reset Your Password"), emailBodyCaptor.capture());
+    assertTrue(emailBodyCaptor.getValue().contains("reset-password?token="));
+    }
+
+@Test
+void requestPasswordResetWithValidMobileShouldGenerateTokenAndSendEmail() {
+    // Arrange
+    when(userRepository.findByMobileNumber(MOBILE)).thenReturn(Optional.of(testUser));
+    testUser.setActive(true);
+    testUser.setMobileVerified(true);
+    testUser.setRegistrationMethod(RegistrationMethod.MOBILE);
+
+    // Act
+    authService.requestPasswordReset("1234567890");
+
+    // Assert
+    verify(passwordResetTokenRepository).save(any(com.app.trekha.user.model.PasswordResetToken.class));
+    ArgumentCaptor<String> emailBodyCaptor = ArgumentCaptor.forClass(String.class);
+    verify(emailService).sendEmail(eq(EMAIL), eq("Trekha - Reset Your Password"), emailBodyCaptor.capture());
+    assertTrue(emailBodyCaptor.getValue().contains("reset-password?token="));
+}
+
+@Test
+void requestPasswordResetWithNonExistentIdentifierShouldThrowException() {
+    // Arrange
+    when(userRepository.findByEmail(anyString())).thenReturn(Optional.empty());
+    when(userRepository.findByMobileNumber(anyString())).thenReturn(Optional.empty());
+
+    // Act & Assert
+    assertThrows(org.springframework.security.core.userdetails.UsernameNotFoundException.class, () -> authService.requestPasswordReset("nonexistent@example.com"));
+}
+
+@Test
+void requestPasswordResetForInactiveAccountShouldThrowException() {
+    // Arrange
+    testUser.setActive(false);
+    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(testUser));
+
+    // Act & Assert
+    assertThrows(IllegalStateException.class, () -> authService.requestPasswordReset("test@example.com"));
+}
+
+@Test
+void requestPasswordResetForUnverifiedEmailShouldThrowException() {
+    // Arrange
+    testUser.setActive(true);
+    testUser.setEmailVerified(false);
+    testUser.setRegistrationMethod(RegistrationMethod.EMAIL);
+    when(userRepository.findByEmail(EMAIL)).thenReturn(Optional.of(testUser));
+
+    // Act & Assert
+    assertThrows(IllegalStateException.class, () -> authService.requestPasswordReset("test@example.com"));
+}
+
+@Test
+void requestPasswordResetForUnverifiedMobileShouldThrowException() {
+    // Arrange
+    testUser.setActive(true);
+    testUser.setMobileVerified(false);
+    testUser.setRegistrationMethod(RegistrationMethod.MOBILE);
+    when(userRepository.findByMobileNumber(MOBILE)).thenReturn(Optional.of(testUser));
+
+    // Act & Assert
+    assertThrows(IllegalStateException.class, () -> authService.requestPasswordReset("1234567890"));
+}
+
+
+@Test
+void resetPasswordWithValidTokenAndRequestShouldResetPassword() {
+    // Arrange
+    String token = "valid-reset-token";
+    String newPassword = "NewPassword123";
+    PasswordResetRequest request = new PasswordResetRequest();
+    request.setNewPassword(newPassword);
+
+    com.app.trekha.user.model.PasswordResetToken resetToken = new com.app.trekha.user.model.PasswordResetToken(token, testUser);
+    when(passwordResetTokenRepository.findByToken(token)).thenReturn(Optional.of(resetToken));
+    when(passwordEncoder.encode(newPassword)).thenReturn("encodedNewPassword");
+
+    // Act
+    authService.resetPassword(token, request);
+
+    // Assert
+    ArgumentCaptor<User> userCaptor = ArgumentCaptor.forClass(User.class);
+    verify(userRepository).save(userCaptor.capture());
+    assertEquals("encodedNewPassword", userCaptor.getValue().getPasswordHash());
+    verify(passwordResetTokenRepository).delete(resetToken);
+}
+
+@Test
+void resetPasswordWithInvalidTokenShouldThrowException() {
+    // Arrange
+    String invalidToken = "invalid-token";
+    PasswordResetRequest request = new PasswordResetRequest();
+    request.setNewPassword("NewPassword123");
+    when(passwordResetTokenRepository.findByToken(invalidToken)).thenReturn(Optional.empty());
+
+    // Act & Assert
+    assertThrows(IllegalArgumentException.class, () -> authService.resetPassword(invalidToken, request));
+}
+
+@Test
+void resetPasswordWithExpiredTokenShouldThrowException() {
+    // Arrange
+    String expiredTokenString = "expired-token";
+    PasswordResetRequest request = new PasswordResetRequest();
+    request.setNewPassword("NewPassword123");
+
+    com.app.trekha.user.model.PasswordResetToken expiredToken = new com.app.trekha.user.model.PasswordResetToken(expiredTokenString, testUser);
+    expiredToken.setExpiryDate(LocalDateTime.now().minusMinutes(1)); // Expired
+
+    when(passwordResetTokenRepository.findByToken(expiredTokenString)).thenReturn(Optional.of(expiredToken));
+
+    // Act & Assert
+    assertThrows(IllegalArgumentException.class, () -> authService.resetPassword(expiredTokenString, request));
+    verify(passwordResetTokenRepository).delete(expiredToken);
+}
+
+@Test
+void resetPasswordWithInvalidPasswordShouldThrowException() {
+    // Arrange
+    String token = "valid-token";
+    PasswordResetRequest request = new PasswordResetRequest();
+    request.setNewPassword("weak"); // Password not meeting criteria
+    com.app.trekha.user.model.PasswordResetToken resetToken = new com.app.trekha.user.model.PasswordResetToken(token, testUser);
+    when(passwordResetTokenRepository.findByToken(token)).thenReturn(Optional.of(resetToken));
+
+    // Act & Assert
+    assertThrows(IllegalArgumentException.class, () -> authService.resetPassword(token, request));
+    verify(userRepository, never()).save(any());
+}
+
 }
