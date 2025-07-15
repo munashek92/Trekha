@@ -55,6 +55,9 @@ public class AuthService {
     private final EmailService emailService;
     private final SmsService smsService;
 
+    private final String otp = String.format("%06d", new Random().nextInt(999999));
+
+
     @Transactional
     public UserResponse registerPassenger(PassengerRegistrationRequest request, RegistrationMethod method) {
         validateRequest(request, method);
@@ -107,7 +110,6 @@ public class AuthService {
 
         } else if (method == RegistrationMethod.MOBILE) {
             // Generate a 6-digit OTP
-            String otp = String.format("%06d", new Random().nextInt(999999));
             VerificationToken verificationToken = new VerificationToken(otp, user);
             tokenRepository.save(verificationToken);
 
